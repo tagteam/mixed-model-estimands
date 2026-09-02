@@ -1,0 +1,320 @@
+#+TITLE: From Question to Mixed Model: A Tutorial on Defining the Target Parameter Before Modeling
+#+Author: Thomas Alexander Gerds and Brice Ozenne
+#+Date: 
+#+EMAIL: tag@biostat.ku.dk
+#+LaTeX_CLASS: org-article
+#+OPTIONS: toc:nil
+#+LaTeX_HEADER:\usepackage{authblk}
+#+LaTeX_HEADER:\usepackage{natbib}
+#+LaTeX_HEADER:\author{Thomas Alexander Gerds}
+#+LaTeX_HEADER:\affil{Department of Biostatistics, University of Copenhagen}
+#+LaTeX_HEADER:\author{Brice Ozenne}
+#+LaTeX_HEADER:\affil{Department of Biostatistics, University of Copenhagen}
+#+LaTeX_HEADER:\author{Jan de Neve}
+#+LaTeX_HEADER:\affil{Department of Biostatistics, Ghent University}
+#+setupfile:~/emacs-genome/snps/org-templates/setup-all-purpose.org
+# #+superman-org-export-target: pdf
+
+* Introduction
+
+Applied researchers often reach for a mixed model whenever data are
+collected repeatedly on the same subjects. The reasoning is typically:
+``I have repeated measurements, therefore I need a mixed model.''
+While this approach recognizes the correlation within individuals, it
+skips the essential first step of formulating a statistical target
+parameter for the scientific question. Without a clearly defined
+estimand, model choice and interpretation become mechanical, and the
+parameters estimated may not sufficiently, or not at all, answer the
+question of scientific interest.
+
+This tutorial describes a principled workflow for moving from a
+scientific question to an estimable parameter. In some applications
+the parameter can be read off from the fit of a mixed model in others
+an estimate can be derived by combinining the parameters of a mixed
+model somehow and often there are simpler tools available to estimate
+the same parameter under different concerns about the various sources
+of bias. The guiding idea:
+#+begin_quote
+/Ask a question → Define the target parameter → Choose one or several model that estimate it → Discuss sources of bias \rightarrow Interpret the result accordingly./
+#+end_quote
+
+#+BEGIN_SRC R :results file graphics :file ./manuscript/mixed-model-estimands.pdf :exports none :session *R* :cache yes :width 8 :height 8
+# Load libraries
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(patchwork)
+set.seed(2025)
+# Simulate irregular time points and noisy values for one individual
+df <- data.table(time = c(0,2.8,4.8,7.1,9.8,12.5),
+                 value = 13 + 0.3 * time + 2 * sin(time / 1.5) + rnorm(6, 0, 1),
+                 missing_value = factor(c(0,0,0,1,0,0)))
+# Smooth underlying "true" curve
+curve_df <- data.table(time = seq(0, 15, length.out = 200))
+curve_df[,value := 10 + 0.8 * curve_df$time + 2 * sin(curve_df$time / 1.5)]
+curve_df[,missing_value := factor(0)]
+# Helper: base plot
+base_plot <- function(df, curve_df, highlight_fun = NULL, title) {
+  g <- ggplot(df, aes(time, value,shape = missing_value)) +
+    ## geom_line(data = curve_df, color = "grey75", linewidth = 0.7) +
+    geom_point(size = 2) +scale_shape_manual(values = c(16,1)) + guides(shape = "none") 
+  if (length(highlight_fun)>0) g <- g+highlight_fun(df, curve_df) 
+  g <- g+labs(title = title, x = "Time", y = "Value") +
+    theme_minimal(base_size = 12) +
+    theme(plot.title = element_text(face = "bold", hjust = 0.5))
+  g
+}
+# (a) Curve with missing segment
+highlight_a <- function(df, curve_df) {
+}
+# (b) Baseline and last value (fixed!)
+highlight_b <- function(df, curve_df) {
+  setkey(df,time)
+  base <- df[1, ]
+  last <- df[nrow(df), ]
+  seg <- df[,rbind(.SD[1],.SD[.N])]
+  list(
+    geom_line(data = seg, color = "firebrick", linewidth = 1.2),
+    geom_point(data = base, color = "firebrick", size = 3),
+    geom_point(data = last, color = "firebrick", size = 3),
+    annotate("text", x = mean(c(base$time, last$time)), 
+             y = mean(c(base$value, last$value)) + 1,
+             label = "Change = last - baseline", color = "firebrick"),
+    annotate("text", x = 5, y = min(df$value) - 1, label = "Target parameter = Δ from baseline", color = "black", size = 3.5)
+  )
+}
+# (c) Area under the curve
+highlight_c <- function(df, curve_df) {
+  list(
+    geom_area(data = df, aes(y = value), fill = "darkseagreen3", alpha = 0.6),
+    geom_line(data = df, color = "darkgreen", linewidth = 1),
+    annotate("text", x = 5, y = min(df$value) + 1, label = "Area under curve", color = "darkgreen"),
+    annotate("text", x = 5, y = min(df$value) - 1, label = "Target parameter = ∫ value(t) dt", color = "black", size = 3.5)
+  )
+}
+# (d) Slope
+highlight_d <- function(df, curve_df) {
+  fit <- lm(value ~ time, data = df)
+  pred <- data.table(time = range(df$time),
+                     value = predict(fit, newdata = df),
+                     missing_value = factor(0))
+  list(
+    geom_line(data = pred, color = "purple", linewidth = 1.2),
+    annotate("text", x = 5, y = min(df$value) + 1, label = paste0("Slope = ", round(coef(fit)[2], 2)), color = "purple"),
+    annotate("text", x = 5, y = min(df$value) - 1, label = "Target parameter = mean rate of change", color = "black", size = 3.5)
+  )
+}
+# (e) Parametric growth model
+highlight_e <- function(df, curve_df) {
+  list(
+    geom_line(data = curve_df, color = "orange", linewidth = 1.2),
+    annotate("text", x = 6, y = min(df$value) + 1, label = "Parametric growth model", color = "orange"),
+    annotate("text", x = 5, y = min(df$value) - 1, label = "Target parameter = growth model parameters", color = "black", size = 3.5)
+  )
+}
+# (f) Time to doubling baseline value
+highlight_f <- function(df, curve_df) {
+  base_val <- df$value[1]
+  thresh <- 2 * base_val
+  t_dbl <- approx(curve_df$value, curve_df$time, xout = thresh)$y
+  list(
+    geom_hline(yintercept = thresh, color = "red", linetype = "dotted"),
+    geom_vline(xintercept = t_dbl, color = "red", linetype = "dashed"),
+    annotate("text", x = t_dbl, y = thresh + 0.5, label = "Doubling time", color = "red", angle = 90, vjust = -0.5),
+    annotate("text", x = 5, y = min(df$value) - 1, label = "Target parameter = time to doubling", color = "black", size = 3.5)
+  )
+}
+# (g) Time to crossing threshold
+highlight_g <- function(df, curve_df) {
+  thresh <- 18
+  t_cross <- approx(curve_df$value, curve_df$time, xout = thresh)$y
+  list(
+    geom_hline(yintercept = thresh, color = "darkred", linetype = "dotted"),
+    geom_vline(xintercept = t_cross, color = "darkred", linetype = "dashed"),
+    annotate("text", x = t_cross + 0.5, y = thresh + 0.5, label = "Threshold crossing", color = "darkred"),
+    annotate("text", x = 5, y = min(df$value) - 1, label = "Target parameter = time to threshold", color = "black", size = 3.5)
+  )
+}
+# (h) Variance of the curve
+highlight_h <- function(df, curve_df) {
+  list(
+    geom_line(color = "gray40", linewidth = 1),
+    annotate("segment", x = df$time, xend = df$time, 
+             y = mean(df$value), yend = df$value, 
+             color = "gray60", linewidth = 0.8),
+    annotate("text", x = 5, y = mean(df$value) + 3, label = "Within-person variability", color = "gray40"),
+    annotate("text", x = 5, y = min(df$value) - 1, label = "Target parameter = variance over time", color = "black", size = 3.5)
+  )
+}
+# Create plots
+p_a <- base_plot(df, curve_df, NULL, "Time series")
+p_b <- base_plot(df, curve_df, highlight_b, "Baseline vs. last")
+p_c <- base_plot(df, curve_df, highlight_c, "Area under curve")
+p_d <- base_plot(df, curve_df, highlight_d, "Slope")
+p_e <- base_plot(df, curve_df, highlight_e, "Parametric model")
+p_f <- base_plot(df, curve_df, highlight_f, "Doubling time")
+p_g <- base_plot(df, curve_df, highlight_g, "Threshold crossing")
+p_h <- base_plot(df, curve_df, highlight_h, "Variance")
+
+# Combine all panels
+final_plot <- (p_a | p_h)/
+  (p_b | p_c | p_d) /
+  (p_e | p_f | p_g) 
+final_plot
+#+END_SRC
+
+#+RESULTS[(2025-10-31 09:29:28) 510c6dbba51cdcbc68c75d73cc41fb09e5464d8e]:
+[[file:./manuscript/mixed-model-estimands.pdf]]
+
+#+name: fig:1
+#+ATTR_LATEX: :width 0.9\textwidth
+#+CAPTION: Illustration of time series data. Typical with measurements taken at irregular 
+[[file:./mixed-model-estimands.pdf]]
+
+* Step 1: Formulate the Scientific Question
+
+Every analysis should begin with a clearly formulated question, e.g.:
+
+- *Does treatment A slow down the decline in eGFR over 5 years compared with treatment B?*
+- *How does the average BMI trajectory differ between men and women born in different decades?*
+- *Is the 10-year incidence of thrombosis lower among transdermal vs. oral hormone users?*
+
+At this stage, avoid statistical language.
+Focus on the clinical or scientific contrast, the population, the time horizon, and the relevant outcomes.
+
+* Step 2: Define the Estimand (Target Parameter)
+To connect the question to analysis, formalize what is meant by "effect" or "difference".
+The ICH E9(R1) framework is helpful here: specify
+
+1. **Population** — who is being studied?
+2. **Variable** — the outcome or endpoint of interest.
+3. **Intervention(s)** — the exposures or treatments being contrasted.
+4. **Intercurrent events** — how to handle events like death, dropout, or switching.
+5. **Summary measure** — how the outcome contrast is summarized (mean difference, slope, odds ratio, etc.).
+
+Example:
+
+#+begin_quote
+*Estimand:* The mean difference in annual decline of eGFR between treatment A and B over 5 years,
+averaged across the treated population, ignoring post-baseline treatment changes.
+#+end_quote
+
+This step forces clarity on what quantity we seek.  Only now can we consider which analysis method can estimate it.
+
+* Step 3: Translate the Estimand into a Statistical Parameter
+Once the estimand is clear, decide what form of statistical parameter corresponds to it.
+
+Key distinction:
+
+- **Marginal (population-average)** parameters describe the effect averaged over the population distribution of random effects.
+  Example: the difference in mean BMI trajectories between sexes, averaged across all individuals.
+- **Conditional (subject-specific)** parameters describe effects within a specific individual or cluster, conditional on its random effect.
+  Example: within-person slope of BMI vs. age, controlling for individual-specific intercept.
+
+Mixed models naturally yield *conditional* (subject-specific) effects.
+Generalized Estimating Equations (GEE) yield *marginal* effects.
+
+Choosing between these depends on what the scientific question refers to.
+Many biostatistical questions are *marginal*: “on average, what is the effect in the population?”
+Mixed models can still be used, but only if we explicitly marginalize or interpret fixed effects appropriately.
+
+* Step 4: Choose an Appropriate Analysis Framework
+Given the target parameter and the data structure, choose the simplest valid method.
+
+- If each subject provides one summary measure (e.g., annual slope), a simple linear model on subject-level data may suffice.
+- If the question concerns population averages across irregular measurement times, GEE may be preferable.
+- If the question concerns subject-specific change or requires modeling of heterogeneity, a mixed model is appropriate.
+- For causal questions with longitudinal exposures, start from a *target-trial* description; a mixed model may estimate part of that estimand but not necessarily the full causal effect.
+
+Mixed models are tools for representing correlation and heterogeneity; they are not inherently "better" than simpler methods.
+The model should be chosen *because* it estimates the pre-specified parameter efficiently and without bias.
+
+* Step 5: Common Pitfalls When Using Mixed Models
+
+**Pitfall 1: Using a mixed model by reflex**
+Researchers include random effects simply because there are repeated measures, without verifying whether
+the parameter of interest requires modeling within-person correlation at all.
+
+**Pitfall 2: Interpreting conditional effects as population effects**
+Fixed effects in mixed models are conditional on the random effects.
+In non-linear models (e.g., logistic mixed models), this distinction is substantial:
+a conditional odds ratio does not equal the marginal odds ratio unless effects are small.
+Failing to distinguish them leads to misinterpretation of “population-level” effects.
+
+**Pitfall 3: Assuming random effects imply causal or biological mechanisms**
+Random intercepts and slopes capture statistical correlation, not necessarily physiological variability.
+Interpreting them mechanistically (e.g., “the random slope represents an individual’s true growth rate”)
+is often unwarranted.
+
+**Pitfall 4: Over-interpreting variance components**
+Variance components quantify unexplained variability at each level, not necessarily "heterogeneity of treatment effect."
+They depend on model specification and scaling.
+
+**Pitfall 5: Ignoring that time coding changes interpretation**
+In longitudinal models, centering or coding of time alters the meaning of intercepts and sometimes slopes.
+If time=0 represents baseline, the fixed intercept is the baseline mean; if centered at follow-up,
+it represents the mean at that time. Many published models misinterpret this.
+
+**Pitfall 6: Using mixed models when summary analysis would suffice**
+If the estimand concerns a simple summary (e.g., average change from baseline),
+aggregating per subject and using a simple regression avoids unnecessary complexity and yields easier interpretation.
+
+**Pitfall 7: Ignoring the implied correlation structure**
+Default random intercept models impose compound symmetry; if the true correlation changes over time,
+estimates of fixed effects can become inefficient or biased.
+Always check whether the chosen random effects structure matches the scientific and data structure.
+
+* Step 6: Diagnostics and Sensitivity
+After fitting a model, verify that it actually estimates the intended parameter.
+
+- Compare model-implied estimates with direct or summary estimates of the same quantity.
+- In non-linear mixed models, consider *marginalizing* to obtain population-average predictions
+  (e.g., using `emmeans`, `marginaleffects`, or simulation).
+- Check sensitivity of results to random-effect structure (random intercept vs. random slope).
+- Examine whether missing data or irregular observation processes might bias parameter interpretation.
+- For longitudinal causal questions, verify that the estimand matches the model conditioning set.
+
+* Step 7: Checklist for Applied Researchers
+Before fitting a mixed model, answer:
+
+1. What is my scientific question?  
+2. What is the target population and summary measure (estimand)?  
+3. Does my estimand refer to a population-average or a subject-specific effect?  
+4. Which statistical framework estimates that quantity most transparently?  
+5. If I use a mixed model, which fixed effect corresponds to my target parameter?  
+6. How will I interpret it—conditional or marginal?  
+7. What are the key assumptions, and how can I check them?  
+8. What alternative analyses would estimate the same estimand?  
+
+Only after this checklist should model fitting begin.
+
+* Step 8: Extensions and Advanced Topics
+
+- **Joint models for longitudinal and time-to-event data**  
+  When the estimand involves both repeated outcomes and event times (e.g., how decline in biomarker predicts mortality),
+  joint modeling provides coherent estimation but requires clear definition of which association parameter is of interest.
+
+- **Informative observation processes**  
+  In register or EHR data, measurement times may depend on health status.
+  The estimand should specify whether inference is conditional on the observation process or represents the full population average.
+
+- **Marginalization of mixed models**  
+  When a population-average estimand is desired but a mixed model is used for efficiency, apply analytic or simulation-based marginalization to recover the marginal parameter.
+
+- **Target-trial logic for observational data**  
+  In emulated trials or observational studies, explicitly defining the target trial clarifies both the estimand and whether a mixed model estimates the intended contrast or a different (conditional) quantity.
+
+* References and Further Reading
+- ICH E9(R1): Addendum on Estimands and Sensitivity Analysis in Clinical Trials.
+- Hernán MA, Robins JM. *Using Big Data to Emulate a Target Trial When a Randomized Trial Is Not Available.*
+- Neuhaus JM, Kalbfleisch JD. *Between- and Within-Cluster Covariate Effects in the Analysis of Clustered Data.*
+- DeBruine LM, Barr DJ. *Understanding Mixed-Effects Models Through Data Simulation.* (2021)
+- Schad DJ et al. *How to Capitalize on A Priori Contrasts in Linear (Mixed) Models.* (2018)
+- Brown VA. *An Introduction to Linear Mixed-Effects Modeling in R.* (2021)
+- Heagerty PJ, Zeger SL. *Marginalized Multilevel Models and Longitudinal Analysis.*
+- Snijders TAB, Bosker RJ. *Multilevel Analysis: An Introduction to Basic and Advanced Multilevel Modeling.*
+
+#+begin_quote
+The essence of good applied statistics is not model sophistication but clarity of the estimand.
+A mixed model is a tool—not an answer—whose relevance depends entirely on the question it is asked to serve.
+#+end_quote
