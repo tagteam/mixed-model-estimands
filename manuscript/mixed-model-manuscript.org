@@ -49,6 +49,32 @@ Question -> estimand -> visualization -> method(s) -> sources of bias -> interpr
 - For each case: plots, estimates, uncertainty and substantive interpretation and simpler analysis.
 
 
+** Relevant papers (tackling a similar topic)
+
+*** McNabb & Murayama (2021): closest conceptual match
+- Reference: McNabb CB, Murayama K. /Unnecessary reliance on multilevel modelling to analyse nested data in neuroscience: When a traditional summary-statistics approach suffices./ Current Research in Neurobiology. 2:100024.
+- [[https://doi.org/10.1016/j.crneur.2021.100024][DOI]]; [[https://orca.cardiff.ac.uk/id/eprint/162761/1/1-s2.0-S2665945X21000206-main.pdf][Published full text]].
+- Demonstrates equivalence between multilevel analyses and t-tests on cluster summaries for the balanced designs considered; examines power, testing procedures and singular fits.
+
+*** Van Breukelen (2024; online 2023): reducing three levels to one
+- Reference: Van Breukelen GJP. /Cluster Randomized Trials with a Pretest and Posttest: Equivalence of Three-, Two- and One-Level Analyses, and Sample Size Calculation./ Multivariate Behavioral Research. 59(2):206-228.
+- [[https://doi.org/10.1080/00273171.2023.2240779][Article]].
+- Establishes equivalences between analyses of individual repeated observations, individual changes, cluster means and cluster-mean changes, with equal cluster sizes in the principal results.
+
+
+*** McNeish, Stapleton & Silverman (2017): alternatives without random effects
+- Reference: McNeish D, Stapleton LM, Silverman RD. /On the unnecessary ubiquity of hierarchical linear modeling./ Psychological Methods. 22(1):114-140.
+- [[https://doi.org/10.1037/met0000078][DOI]]; [[https://www.stat-help.com/McNeish%20et%20al.%20%282017%29.pdf][Published paper]].
+- Compares hierarchical models with generalised estimating equations and cluster-robust standard errors, including situations where random effects change coefficient interpretation.
+
+*** Kahan et al. (2024): estimand-first analysis of clusters
+- Reference: Kahan BC, Blette BS, Harhay MO, Halpern SD, Jairath V, Copas A, Li F. /Demystifying estimands in cluster-randomised trials./ Statistical Methods in Medical Research. 33(7):1211-1232.
+- [[https://doi.org/10.1177/09622802241254197][Article]]; [[https://pmc.ncbi.nlm.nih.gov/articles/PMC11348634/][Open-access text]].
+- Distinguishes participant- versus cluster-average and marginal versus cluster-specific estimands; links estimands to estimators, including cluster-summary analyses.
+
+
+
+
 
 * Introduction
 
