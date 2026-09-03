@@ -20,7 +20,7 @@
 
 ** Purpose
 - Audience: applied researchers with methodological interest, including clinicians.
-- Target journal: /Statistics in Medicine.
+- Target journal: Statistics in Medicine.
 - Main goal: explain mixed-model output through familiar analyses. A simpler valid analysis is a successful outcome.
 
 ** Workflow
