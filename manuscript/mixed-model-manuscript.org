@@ -15,6 +15,40 @@
 #+setupfile:~/emacs-genome/snps/org-templates/setup-all-purpose.org
 # #+superman-org-export-target: pdf
 
+
+* Meeting notes September 3, 2026
+
+* Purpose
+- Audience: applied researchers with methodological interest, including clinicians.
+- Target journal: /Statistics in Medicine/ or similar.
+- Main goal: explain mixed-model output through familiar analyses. A simpler valid analysis is a successful outcome.
+
+* Workflow
+Question -> estimand -> visualization -> method(s) -> sources of bias -> interpretation.
+- Define the population, outcome, timeframe and comparison.
+- Example estimands: mean change, between-group difference in change, association between two changes.
+- Start with spaghetti plots and individual changes; distinguish within-person patterns from between-person differences.
+* Connect simple methods to mixed models
+- Compare paired t-tests, change-score analyses, ANCOVA and repeated-measures ANOVA.
+- Show which estimands are obtained directly and which require parameter combinations.
+- State when equivalence holds: matching data, appropriate mean/covariance structures and estimation methods.
+- Distinguish identical estimates from identical standard errors, confidence intervals and p-values.[fn:1]
+* Sources of bias and missing data
+- Address confounding, selective dropout and model misspecification.
+- Compare complete-case analysis, mixed models using available measurements and multiple imputation.
+- Explain MAR: conditional on included observed information, missingness does not further depend on missing values. Appropriate model specification also matters.[fn:2]
+- For complete cases, specify the retained population and justify generalization to the original target population.
+- Assess sensitivity to departures from MAR.
+* Interpret random effects
+- Represent unmeasured person/cluster heterogeneity; do not automatically replace covariates or correct confounding.[fn:3]
+- Explain conditional versus population-average interpretations and the relationship between random effects and covariates.
+* Case studies and scope
+- Initially focus on continuous longitudinal outcomes: one central dataset, optionally a clustered education dataset.
+- Use simulations based on familiar cases where helpful.
+- For each case: plots, estimates, uncertainty and substantive interpretation.
+
+
+
 * Introduction
 
 Applied researchers often reach for a mixed model whenever data are
